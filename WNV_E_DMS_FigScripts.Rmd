@@ -1,0 +1,962 @@
+---
+title: "WNV_E_DMS_FigScripts"
+output: html_document
+date: "2025-03-14"
+---
+
+# Analyzing DMS Data
+```{r}
+library(tidyverse)
+library(stringr)
+library(ggplot2)
+library(bio3d)
+
+#input dms enrich2 scores, process and transpose C6/36 and DCSIGNR data
+E_DMS <- read.csv("~/OneDrive - National Institutes of Health/WNV_E_DMS/DMS_P1_CG-DC-C6-Ve_RepAB_WTNorm_052125/FullDMS_CG-DC-C6-Ve/tsv/P1_CGDCC6Ve_RepAB_exp/main_identifiers_scores_shared_full.tsv", sep='\t')
+E_DMS <- E_DMS[-c(1:4),]
+i <- c(2:17)
+E_DMS[, i] <- apply(E_DMS[, i], 2, function(x) as.numeric(x))
+E_DMS$sub <- gsub("[p.(]", "", E_DMS$condition)
+E_DMS$sub <- gsub("[)]", "", E_DMS$sub)
+E_DMS$site <- as.numeric(gsub('^.|.$', '', E_DMS$sub))
+E_DMS <- subset(E_DMS, site >= 263 & site <= 763)
+E_DMS$site <- E_DMS$site-262
+E_DMS$sub <- paste(str_sub(E_DMS$sub, 1, 1), E_DMS$site, substr(E_DMS$sub, nchar(E_DMS$sub), nchar(E_DMS$sub)), sep='')
+c6 <- data.frame(sub=E_DMS$sub, site=E_DMS$site, score=rowMeans(E_DMS[,c(3,5)], na.rm=TRUE), SE=rowMeans(E_DMS[,c(2,4)], na.rm=TRUE))
+colnames(c6) <- c('sub', 'aaSite', 'score', 'SE')
+c6$host <- rep('Mosquito', nrow(c6))
+dc <- data.frame(sub=E_DMS$sub, site=E_DMS$site, score=rowMeans(E_DMS[,c(11,13)], na.rm=TRUE), SE=rowMeans(E_DMS[,c(10,12)], na.rm=TRUE))
+colnames(dc) <- c('sub', 'aaSite', 'score', 'SE')
+dc$host <- rep('Human', nrow(dc))
+cg <- data.frame(sub=E_DMS$sub, site=E_DMS$site, score=rowMeans(E_DMS[,c(7,9)], na.rm=TRUE), SE=rowMeans(E_DMS[,c(6,8)], na.rm=TRUE))
+colnames(cg) <- c('sub', 'aaSite', 'score', 'SE')
+cg$host <- rep('Bird', nrow(cg))
+dmsFits <- rbind(dc,c6,cg)
+
+cor.test(as.numeric(E_DMS$C6.1), as.numeric(E_DMS$C6.3))
+cor.test(as.numeric(E_DMS$DC.1), as.numeric(E_DMS$DC.3))
+cor.test(as.numeric(E_DMS$CG.1), as.numeric(E_DMS$CG.3))
+#Fig S2 A,B
+ggplot(E_DMS, aes(x=DC.1, y=DC.3))+
+  geom_point()+
+  labs(x='Rep A', y='Rep B', title='DCSIGNR Fitness Scores')+
+  theme_bw()
+ggsave('~/OneDrive - National Institutes of Health/WNV_E_DMS/Figures/DCReps.pdf')
+ggplot(E_DMS, aes(x=C6.1, y=C6.3))+
+  geom_point()+
+  labs(x='Rep A', y='Rep B', title='C6/36 Fitness Scores')+
+  theme_bw()
+ggsave('~/OneDrive - National Institutes of Health/WNV_E_DMS/Figures/C6Reps.pdf')
+ggplot(E_DMS, aes(x=CG.1, y=CG.3))+
+  geom_point()+
+  labs(x='Rep A', y='Rep B', title='CGBQ Fitness Scores')+
+  theme_bw()
+ggsave('~/OneDrive - National Institutes of Health/WNV_E_DMS/Figures/CGReps.pdf')
+
+#Extracting only E sequence 
+dmsFitE <- data.frame(matrix(ncol=5,nrow=0))
+colnames(dmsFitE) <- c('sub', 'score', 'host', 'aaSite', 'SE')
+i=1
+while (i <= nrow(dmsFits)){
+  site <- as.numeric(gsub('^.|.$', '', dmsFits[i,1]))
+  if (site >= 263 & site <= 763){
+    newSub <- paste(str_sub(dmsFits[i,1], 1, 1), site-262, substr(dmsFits[i,1], nchar(dmsFits[i,1]), nchar(dmsFits[i,1])), sep='')
+    newdf <- data.frame(sub=newSub, score=dmsFits[i,2], host=dmsFits[i,4], aaSite=site-262, SE=dmsFits[i,3])
+    dmsFitE <- rbind(dmsFitE, newdf)
+  }
+  i=i+1
+}
+
+write.table(dmsFitE,file="~/OneDrive - National Institutes of Health/WNV_E_DMS/DMS_P1_C6_DC_Ve_RepAB/DMS_P1_C6_DC_RepAB_Efit.csv", row.names=FALSE, sep=",")
+```
+
+# Normalizing to WT
+```{r}
+library(tidyverse)
+library(ggplot2)
+
+E_DMSwt <- read.csv("~/OneDrive - National Institutes of Health/WNV_E_DMS/DMS_P1_CG-DC-C6-Ve_RepAB_WTNorm_052125/WTNorm_CG-DC-C6/tsv/WTNorm_CGDCC6_RepAB_exp/main_identifiers_scores_shared_full.tsv", sep='\t')
+E_DMSwt <- E_DMSwt[-c(1:4),]
+i <- c(2:13)
+E_DMSwt[, i] <- apply(E_DMSwt[, i], 2, function(x) as.numeric(x))
+E_DMSwt$sub <- gsub("[p.(]", "", E_DMSwt$condition)
+E_DMSwt$sub <- gsub("[)]", "", E_DMSwt$sub)
+E_DMSwt$site <- as.numeric(gsub('^.|.$', '', E_DMSwt$sub))
+E_DMSwt <- subset(E_DMSwt,((site >= 396 & site <= 437) | (site >= 701 & site <= 743)))
+E_DMSwt$site <- E_DMSwt$site-262
+E_DMSwt$sub <- paste(str_sub(E_DMSwt$sub, 1, 1), E_DMSwt$site, substr(E_DMSwt$sub, nchar(E_DMSwt$sub), nchar(E_DMSwt$sub)), sep='')
+c6 <- data.frame(sub=E_DMSwt$sub, site=E_DMSwt$site, score=rowMeans(E_DMSwt[,c(3,5)], na.rm=TRUE), SE=rowMeans(E_DMSwt[,c(2,4)], na.rm=TRUE))
+colnames(c6) <- c('sub', 'aaSite', 'score', 'SE')
+c6$host <- rep('Mosquito', nrow(c6))
+cg <- data.frame(sub=E_DMSwt$sub, site=E_DMSwt$site, score=rowMeans(E_DMSwt[,c(7,9)], na.rm=TRUE), SE=rowMeans(E_DMSwt[,c(6,8)], na.rm=TRUE))
+colnames(cg) <- c('sub', 'aaSite', 'score', 'SE')
+cg$host <- rep('Bird', nrow(cg))
+dc <- data.frame(sub=E_DMSwt$sub, site=E_DMSwt$site, score=rowMeans(E_DMSwt[,c(11,13)], na.rm=TRUE), SE=rowMeans(E_DMSwt[,c(10,12)], na.rm=TRUE))
+colnames(dc) <- c('sub', 'aaSite', 'score', 'SE')
+dc$host <- rep('Human', nrow(dc))
+dmsFitEwtN <- rbind(dc,c6,cg)
+
+#correlation and model between WT normalized values and w/o WT
+dmsFitEnowt <- read.csv("~/OneDrive - National Institutes of Health/WNV_E_DMS/DMS_P1_CG-DC-C6-Ve_RepAB_WTNorm_052125/DMS_P1_CG_C6_DC_Ve_RepAB_Efit_060425.csv")
+normCorC6 <- merge(subset(dmsFitEnowt, host=='Mosquito'), subset(dmsFitEwtN, host=='Mosquito'), by='sub')
+normCorDC <- merge(subset(dmsFitEnowt, host=='Human'), subset(dmsFitEwtN, host=='Human'), by='sub')
+normCorCG <- merge(subset(dmsFitEnowt, host=='Bird'), subset(dmsFitEwtN, host=='Bird'), by='sub')
+# Sup Fig 2 C,D
+ggplot(normCorC6, aes(x=score.x, y=score.y))+
+  geom_point()+
+  theme_bw()+
+  labs(x='Raw Fitness Effect', y='WT-Normalized Fitness Effect')+
+  ggtitle('C6/36 DMS WT Normalization')
+ggsave('~/OneDrive - National Institutes of Health/WNV_E_DMS/Figures/C6WTNorm.pdf')
+ggplot(normCorDC, aes(x=score.x, y=score.y))+
+  geom_point()+
+  theme_bw()+
+  labs(x='Raw Fitness Effect', y='WT-Normalized Fitness Effect')+
+  ggtitle('Raji DMS WT Normalization')
+ggsave('~/OneDrive - National Institutes of Health/WNV_E_DMS/Figures/RajWTNorm.pdf')
+ggplot(normCorCG, aes(x=score.x, score.y))+
+  geom_point()+
+  theme_bw()+
+  labs(x='Raw Fitness Effect', y='WT-Normalized Fitness Effect')+
+  ggtitle('CGBQ DMS WT Normalization')
+ggsave('~/OneDrive - National Institutes of Health/WNV_E_DMS/Figures/CGWTNorm.pdf')
+cor.test(normCorC6$score.x, normCorC6$score.y)
+cor.test(normCorDC$score.x, normCorDC$score.y)
+cor.test(normCorCG$score.x, normCorCG$score.y)
+
+lm(formula = normCorC6$score.y ~ normCorC6$score.x)
+lm(formula = normCorDC$score.y ~ normCorDC$score.x)
+lm(formula = normCorCG$score.y ~ normCorCG$score.x)
+
+normC6 <- function(fit){
+  norm <- fit*0.9403 - 1.6898
+  return(norm)
+}
+
+normDC <- function(fit){
+  norm <- fit*1.077 - 1.944
+  return(norm)
+}
+
+normCG <- function(fit){
+  norm <- fit*0.9613-1.9627
+  return(norm)
+}
+
+dmsFitNormC6 <- subset(dmsFitEnowt, host=='Mosquito')
+dmsFitNormC6$normFit <- normC6(dmsFitNormC6$score)
+dmsFitNormDC <- subset(dmsFitEnowt, host=='Human')
+dmsFitNormDC$normFit <- normDC(dmsFitNormDC$score)
+dmsFitNormCG <- subset(dmsFitEnowt, host=='Bird')
+dmsFitNormCG$normFit <- normCG(dmsFitNormCG$score)
+dmsFitNorm <- rbind(dmsFitNormC6, dmsFitNormDC, dmsFitNormCG)
+write.table(dmsFitNorm, file="~/OneDrive - National Institutes of Health/WNV_E_DMS/DMS_P1_CG-DC-C6-Ve_RepAB_WTNorm_052125/DMS_P1_CG_C6_DC_RepAB_normEfit_060425.csv", row.names=FALSE, sep=",")
+```
+
+# Figure 1
+```{r}
+library(ggplot2)
+library(dplyr)
+library(stringr)
+
+fits <- read.csv("~/OneDrive - National Institutes of Health/WNV_E_DMS/DMS_P1_CG-DC-C6-Ve_RepAB_WTNorm_052125/DMS_P1_CG_C6_DC_RepAB_normEfit_060425.csv")
+
+#Fig 1B: E Protein Linear Map
+#Domains defined in Nybakken et al., JVI (2006)
+d1 <- c(1:51, 134:195, 285:297)
+d2 <- c(52:97, 111:133, 196:284)
+d3 <- c(298:400)
+tm <- c(401:501)
+fits$Domain <- ifelse(fits$aaSite %in% d1, 'DI', ifelse(fits$aaSite %in% d2, 'DII', ifelse(fits$aaSite %in% d3, 'DIII', ifelse(fits$aaSite %in% tm, 'TM', 'FL'))))
+domPos <- unique(fits[,c(4,7)])
+domPos$value=rep(1, nrow(domPos))
+ggplot(domPos, aes(x=aaSite, y=value, fill=Domain))+
+  geom_col(width=1)+
+  theme_classic()+
+  scale_fill_manual(values=c(DI='red', DII='yellow', DIII='blue', TM='#940094', FL='cyan'))
+ggsave('~/OneDrive - National Institutes of Health/WNV_E_DMS/Figures/domGen.pdf', height=2, width=15)
+
+#Fig 1C
+median(sort(subset(fits, host=='Human' & aaSite %in% c(98:110))$normFit))
+median(sort(subset(fits, host=='Mosquito' & aaSite %in% c(98:110))$normFit))
+median(sort(subset(fits, host=='Bird' & aaSite %in% c(98:110))$normFit))
+fits$fitCat <- ifelse(fits$normFit+1.96*fits$SE <= -3.8 & fits$host=='Human', 'Lethal', ifelse(fits$normFit+1.96*fits$SE <= -2.9 & fits$host=='Mosquito', 'Lethal', ifelse(fits$normFit+1.96*fits$SE <= -4 & fits$host=='Bird', 'Lethal', ifelse(fits$normFit-1.96*fits$SE >= 0.5, 'Beneficial', ifelse(fits$normFit+1.96*fits$SE <= -0.5, 'Deleterious', 'Neutral')))))
+ggplot(fits, aes(x=normFit, fill=fitCat))+
+  geom_histogram()+
+  facet_wrap(~host)+
+  theme_bw()+
+  scale_fill_manual(values=c(Beneficial='lightgoldenrod3', Neutral='lightcyan3', Deleterious='honeydew4', Lethal='black'))+
+  labs(x='WT-Normnalized Fitness', y='Count', fill='Fitness Category')
+ggsave('~/OneDrive - National Institutes of Health/WNV_E_DMS/Figures/catHist.pdf', height=7, width=12)
+
+#Fig 1D
+meddf <- data.frame(matrix(ncol=3, nrow=0))
+for (each in unique(fits$aaSite)){
+  subdfH <- subset(fits, aaSite==each & host=='Human')
+  subdfM <- subset(fits, aaSite==each & host=='Mosquito')
+  subdfB <- subset(fits, aaSite==each & host=='Bird')
+  hent <- median(subdfH$normFit)
+  ment <- median(subdfM$normFit)
+  bent <- median(subdfB$normFit)
+  newdf <- data.frame(site=c(each, each, each), score=c(hent, ment, bent), host=c('Human', 'Mosquito', 'Bird'))#, 'Difference'))
+  meddf <- rbind(meddf, newdf)
+}
+
+write.table(meddf,file="~/OneDrive - National Institutes of Health/WNV_E_DMS/DMS_P1_CG-DC-C6-Ve_RepAB_WTNorm_052125/DMS_P1_CG_C6_DC_RepAB_medNormEfit_060425.csv", row.names=FALSE, sep=",")
+cor.test(subset(fits, host=='Bird')$normFit, subset(fits, host=='Human')$normFit)
+cor.test(subset(fits, host=='Bird')$normFit, subset(fits, host=='Mosquito')$normFit)
+cor.test(subset(fits, host=='Human')$normFit, subset(fits, host=='Mosquito')$normFit)
+
+meddf <- read.csv("~/OneDrive - National Institutes of Health/WNV_E_DMS/DMS_P1_CG-DC-C6-Ve_RepAB_WTNorm_052125/DMS_P1_CG_C6_DC_RepAB_medNormEfit_060425.csv")
+ggplot(meddf, aes(x=site, y=score, color=host))+
+  geom_line(aes(group=host))+
+  theme_bw()+
+  scale_color_manual(labels=c('CGBQ', 'Raji', 'C6/36'), values=c(Human='mediumpurple3', Mosquito='darkgreen', Bird='coral3'))+#, Difference='burlywood2'))+
+  labs(x='Amino Acid Position', y='Median WT-Normalized Fitness', color='Host')
+ggsave('~/OneDrive - National Institutes of Health/WNV_E_DMS/Figures/MedSiteLine.pdf', height=3, width=14)
+
+#Fig 1E
+#Heat map
+fits <- read.csv("~/OneDrive - National Institutes of Health/WNV_E_DMS/DMS_P1_CG-DC-C6-Ve_RepAB_WTNorm_052125/DMS_P1_CG_C6_DC_RepAB_normEfit_060425.csv")
+fits$aaSub <- str_sub(fits$sub, start=-1)
+fits$aaWt <- str_sub(fits$sub, end=1)
+fits <- fits[order(fits$sub),]
+wraps <- data.frame(aaSite=c(1:501), column=c(rep('A', 250), rep('B', 251)))
+fits <- merge(fits, wraps, by='aaSite')
+aaOrder <- c('A', 'V', 'I', 'L', 'M', 'F', 'Y', 'W', 'S', 'T', 'N', 'Q',  'R', 'H', 'K', 'D', 'E', 'C', 'G', 'P')
+ggplot(fits)+
+  geom_tile(aes(x=aaSite, y=factor(aaSub, level=aaOrder)), fill='black')+
+  geom_tile(aes(x=aaSite, y=factor(aaSub, level=aaOrder), fill=normFit))+
+  scale_fill_gradient2(midpoint=0, high="darkorange4", mid="#ebebeb", low="royalblue4")+
+  facet_wrap(column ~ host, scales='free_x', ncol=1)+
+  theme(aspect.ratio = 0.1, axis.text.y = element_text(size = 3))+ 
+  theme(strip.text.x = element_blank())+
+  labs(x='Amino Acid Position', y='Amino Acid Substitution', fill='Fitness Effect')
+ggsave('~/OneDrive - National Institutes of Health/WNV_E_DMS/Figures/fitHeat.pdf', height=7, width=15)
+
+domPos <- unique(fits[,c(1,7,11)])
+domPos$value=rep(1, nrow(domPos))
+ggplot(domPos, aes(x=aaSite, y=value, fill=Domain))+
+  geom_col(width=1)+
+  theme_classic()+
+  facet_wrap(column ~ ., scales='free_x', ncol=1)+
+  scale_fill_manual(values=c(DI='red', DII='yellow', DIII='blue', TM='#940094', FL='cyan'))
+ggsave('~/OneDrive - National Institutes of Health/WNV_E_DMS/Figures/heatmapDoms.pdf')
+```
+
+
+# Figure 3
+## Figure Libraries
+```{r}
+library(data.table)
+library(lsa)
+library(ggplot2)
+library(cowplot)
+library(bio3d)
+```
+
+## Fig 3A
+```{r}
+fits <- read.csv("~/OneDrive - National Institutes of Health/WNV_E_DMS/DMS_P1_C6_DC_Ve_RepAB/DMS_P1_C6_DC_RepAB_normEfit.csv")
+fits$fitCat <- ifelse(fits$normFit+1.96*fits$SE <= -4 & fits$host=='Human', 'Lethal', ifelse(fits$normFit+1.96*fits$SE <= -2.8 & fits$host=='Mosquito', 'Lethal', ifelse(fits$normFit-1.96*fits$SE >= 0.5, 'Beneficial', ifelse(fits$normFit+1.96*fits$SE <= -0.5, 'Deleterious', 'Neutral'))))
+fitCats <- fits[,c(1,5,7)] %>% pivot_wider(names_from='host', values_from='fitCat')
+fitCatFreq <- as.data.frame(table(paste(fitCats$Mosquito, fitCats$Human, fitCats$Bird, sep='_')))
+fitCatFreq <- fitCatFreq[order(fitCatFreq$Freq, decreasing=TRUE),]
+comboOrd <- c('Lethal_Lethal_Lethal', 'Deleterious_Deleterious_Deleterious', 'Neutral_Neutral_Neutral', 'Beneficial_Beneficial_Beneficial', 'Neutral_Deleterious_Deleterious', 'Neutral_Neutral_Deleterious', 'Deleterious_Neutral_Deleterious', 'Deleterious_Deleterious_Neutral', 'Neutral_Deleterious_Neutral', 'Deleterious_Neutral_Neutral', 'Neutral_Beneficial_Deleterious', 'Neutral_Deleterious_Lethal', 'Neutral_Lethal_Deleterious', 'Deleterious_Deleterious_Beneficial', 'Neutral_Deleterious_Beneficial', 'Deleterious_Neutral_Lethal', 'Beneficial_Deleterious_Neutral', 'Deleterious_Beneficial_Deleterious', 'Deleterious_Lethal_Neutral', 'Neutral_Lethal_Lethal', 'Lethal_Lethal_Deleterious', 'Deleterious_Lethal_Deleterious', 'Lethal_Deleterious_Deleterious', 'Deleterious_Deleterious_Lethal', 'Deleterious_Lethal_Lethal', 'Lethal_Deleterious_Lethal', 'Neutral_Beneficial_Neutral', 'Neutral_Neutral_Beneficial', 'Beneficial_Beneficial_Neutral', 'Beneficial_Neutral_Beneficial', 'Beneficial_Neutral_Neutral')
+ggplot(fitCatFreq, aes(x=factor(Var1, levels=comboOrd), y=Freq))+
+  geom_col(fill='deeppink3')+
+  geom_text(aes(label=Freq), nudge_y=400)+
+  theme_classic()+
+  theme(axis.title.x=element_blank(), axis.text.x=element_blank(), axis.ticks.x=element_blank())
+ggsave('~/OneDrive - National Institutes of Health/WNV_E_DMS/Figures/fitCat_comp.pdf', height=1.5, width=12)
+
+fitCatFreq <- cbind(fitCatFreq, as.data.frame(str_split_fixed(fitCatFreq$Var1, '_', 3)))
+colnames(fitCatFreq) <- c('combo', 'Freq', 'Mosquito', 'Human', 'Bird')
+fitCatLong <- pivot_longer(fitCatFreq, cols=c('Mosquito', 'Human', 'Bird'), names_to='Host', values_to='fitCat')
+ggplot(fitCatLong, aes(x=factor(combo, levels=comboOrd), y=Host, color=fitCat))+
+  geom_count()+
+  theme_classic()+
+  theme(axis.title.x=element_blank(), axis.text.x=element_blank(), axis.ticks.x=element_blank())+
+  scale_color_manual(values=c('lightgoldenrod3', 'honeydew4', 'black', 'lightcyan3'))
+ggsave('~/OneDrive - National Institutes of Health/WNV_E_DMS/Figures/fitCat_map.pdf', height=2, width=16)
+```
+
+## Calculate Cosine Distances and Median Differences
+```{r}
+cosDist<-function(D,condcol){
+  conditions=unique(condcol) #
+  combs=combn(conditions,2)
+  N=ncol(combs)
+  ALLTABLES<-data.table()
+  for( combo in 1:N ){
+    Va=as.numeric(D[host==combs[1,combo],score])
+    Vb=as.numeric(D[host==combs[2,combo],score])
+    Cdist=1-min(cosine(cbind(Va,Vb)))
+    rowmns=mean(Va-Vb)#
+    rowmeds=median(Va)-median(Vb)
+    allmean=mean(c(Va,Vb))
+    NewEntry<-data.table(comp=paste(combs[,combo],collapse = "_"),
+                         cdist=Cdist,
+                         means=rowmns,
+                         meds=rowmeds,
+                         allmean=allmean)
+    ALLTABLES=rbindlist(list(NewEntry,ALLTABLES))
+  }
+  return( ALLTABLES )
+}
+
+allDMS<-fread("~/OneDrive - National Institutes of Health/WNV_E_DMS/DMS_P1_C6_DC_Ve_RepAB/DMS_P1_C6_DC_RepAB_normEfit.csv")
+allDMS[,c("Ref","Mut"):=tstrsplit(sub,aaSite),by=aaSite]
+CosDists=allDMS[,cosDist(.SD,host),by=aaSite]
+```
+
+## Fig 3B-G
+```{r}
+ggplot(CosDists)+
+  geom_col(aes(x=aaSite, y=cdist, fill=cdist))+
+  scale_fill_gradient(low='#797979', high='#FF2600')+
+  facet_wrap(~comp, ncol=1)+
+  theme_bw()
+ggsave('~/OneDrive - National Institutes of Health/WNV_E_DMS/Figures/cosDists.pdf', height=5, width=14)
+
+ggplot(subset(CosDists, comp=='Human_Bird'))+
+  geom_col(aes(x=aaSite, y=meds, fill=meds))+
+  scale_fill_gradient2(midpoint=0, high="#8369c6", mid="#ebebeb", low="#be624d")+
+  theme_bw()
+ggsave('~/OneDrive - National Institutes of Health/WNV_E_DMS/Figures/medDif_HB.pdf', height=5, width=14)
+
+ggplot(subset(CosDists, comp=='Mosquito_Bird'))+
+  geom_col(aes(x=aaSite, y=meds, fill=meds))+
+  scale_fill_gradient2(midpoint=0, high="#286218", mid="#ebebeb", low="#be624d")+
+  theme_bw()
+ggsave('~/OneDrive - National Institutes of Health/WNV_E_DMS/Figures/medDif_MB.pdf', height=5, width=14)
+
+ggplot(subset(CosDists, comp=='Mosquito_Human'))+
+  geom_col(aes(x=aaSite, y=meds, fill=meds))+
+  scale_fill_gradient2(midpoint=0, high="#286218", mid="#ebebeb", low="#8369c6")+
+  theme_bw()
+ggsave('~/OneDrive - National Institutes of Health/WNV_E_DMS/Figures/medDif_MH.pdf', height=5, width=14)
+
+#Sup Fig 4A-B
+cowplot::plot_grid(nrow=3,align = 'h',
+ggplot(allDMS[aaSite %in% CosDists[cdist>1]$aaSite ])+
+  ggtitle("Greatest Cosine Distances (CDist>1)")+
+  geom_tile(col='black',aes(as.factor(host),factor(Mut,levels=c("W","F","Y","H","N","Q","R","K","E","D","P","C","G","A","V","L","I","M","S","T")),fill=normFit))+
+  coord_fixed()+theme_dark()+
+  theme(axis.text.x=element_text(angle=90))+
+  facet_wrap(~aaSite,drop = T,ncol = 20)+
+  scale_fill_gradient2("WT-Normalized Fitness",midpoint = 0,high = "darkorange3",mid = "grey90",low="#011993",limits=c(-10,2))+
+  labs(x='Host by Site', y='Amino Acid'),
+
+ggplot(allDMS[aaSite %in% CosDists[meds>2]$aaSite ])+
+  ggtitle("Greatest Median Difference (>2)")+
+  geom_tile(col='black',aes(as.factor(host),factor(Mut,levels=c("W","F","Y","H","N","Q","R","K","E","D","P","C","G","A","V","L","I","M","S","T")),fill=normFit))+
+  coord_fixed()+theme_dark()+
+  theme(axis.text.x=element_text(angle=90))+
+  facet_wrap(~aaSite,drop = T,ncol = 34)+
+  scale_fill_gradient2(midpoint = 0,high = "darkorange3",mid = "grey90",low="#011993",limits=c(-10,2))+
+  labs(x='Host by Site', y='Amino Acid', fill='WT-Normalized Fitness'),
+
+ggplot(allDMS[aaSite %in% CosDists[meds<(-0.5)]$aaSite ])+
+  ggtitle("Greatest Median Difference (<-0.5)")+
+  geom_tile(col='black',aes(as.factor(host),factor(Mut,levels=c("W","F","Y","H","N","Q","R","K","E","D","P","C","G","A","V","L","I","M","S","T")),fill=normFit))+
+  coord_fixed()+theme_dark()+
+  theme(axis.text.x=element_text(angle=90))+
+  facet_wrap(~aaSite,drop = T,ncol = 20)+
+  scale_fill_gradient2(midpoint = 0,high = "darkorange3",mid = "grey90",low="#011993",limits=c(-10,2))+
+  labs(x='Host by Site', y='Amino Acid', fill='WT-Normalized Fitness')
+)
+ggsave('~/OneDrive - National Institutes of Health/WNV_E_DMS/Figures/topCosDists_heat.pdf', height=12, width=16)
+```
+
+# Figure 5
+## Figure Libraries
+```{r}
+library(Biostrings)
+library(tidyr)
+library(DECIPHER)
+library(dplyr)
+library(stringr)
+library(ggplot2)
+library(ape)
+```
+
+## Filtering of BLASTp Results Using Metadata from Batch Entrez
+```{python}
+from Bio import SeqIO
+
+with open("WNV_NY99_E_blastp_Lin1.gff3") as file:
+    lines = [line.rstrip() for line in file]
+
+birds=['asio', 'jay', 'poecile', 'grosbeak', 'hawk', 'goose', 'swallow', 'bubo', 'loriidae', 'quiscalus', 'larus', 'charadrius', 'crow', 'mockingbird', 'sturnidae', 'pigeon', 'colaptes', 'columba', 'eagle', 'cardinalis', 'egretta', 'passer', 'corvus', 'shrike', 'bird', 'sternula', 'grackel', 'sparrow', 'phoenicopterus', 'euphagus', 'accipiter', 'owl', 'pelecanus', 'falco', 'hudsonia', 'ictinia', 'accipitridae', 'corvuscornix', 'tristis', 'magpie', 'finch', 'bluebird', 'bluejay', 'stork', 'cardinal', 'warbler', 'turdus', 'phalacrocorax', 'pica', 'titmouse', 'grobbeak', 'gallus', 'coragyps', 'acrocephalus', 'carpodacus', 'raven', 'zenaida', 'garrulus', 'buteo', 'baeolophus', 'actitis', 'haliaeetus', 'calidris', 'cyanocitta', 'cormorant', 'coot', 'catbird', 'branta', 'heron', 'crocodylus', 'spinus', 'robin', 'grackle', 'loriini', 'haemorhous', 'dove', 'hummingbird', 'blackbird', 'cygnus']
+
+mams=['human', 'camelus', 'horse', 'squirrel', 'equus', 'sapiens', 'donkey', 'musculus', 'sciurus', 'mouse', 'alpaca', 'equine', 'rousettus']
+
+arths=['culiseta', 'culex', 'aedes', 'coquillettidia', 'hyalomma', 'mosquito', 'triseriatus', 'ornithodoros', 'anopheles', 'ochlerotatus', 'psorophora']
+
+hostIDs=['id,host\n']
+ids=[]
+for each in lines:
+  if 'nat-host' in each:
+    line=each.split('\t')
+    for entry in line:
+      if 'nat-host' in entry:
+        atts=entry.split(';')
+        atts_dict={}
+        for att in atts:
+          input=att.split('=')
+          atts_dict[input[0]]=input[1]
+        host=atts_dict['nat-host'].lower()
+        acc=atts_dict['ID'].split(':')[0]
+        if any(bird in host for bird in birds):
+          hostIDs.append(acc+',bird\n')
+          ids.append(acc)
+        if any(mam in host for mam in mams):
+          hostIDs.append(acc+',mam\n')
+          ids.append(acc)
+        if any(arth in host for arth in arths):
+          hostIDs.append(acc+',arth\n')
+          ids.append(acc)
+
+fasta = 'WNV_Ny99_E_blasp.fasta'
+record_dict = SeqIO.to_dict(SeqIO.parse(fasta, "fasta"))
+keeps = {}
+for each in record_dict:
+	acc=each.split(':')[0]
+	if (acc in ids):
+		keeps[acc] = record_dict[each]
+
+SeqIO.write(keeps.values(), "WNV_Ny99_E_blasp_filt.fasta", "fasta")
+with open('WNV_E_hostIDs.csv', 'w') as f:
+  for item in hostIDs:
+    f.write(item)
+```
+
+## DMS Score of Natural Substitutions
+```{r}
+#Associating DMS fitness scores with naturally occurring substitutions in viruses isolated from different hosts
+hostIDs <- read.csv('~/OneDrive - National Institutes of Health/WNV_E_DMS/Lin1NatDiversityHostComp/WNV_E_hostIDs.csv')
+linEs <- readAAStringSet('~/OneDrive - National Institutes of Health/WNV_E_DMS/Lin1NatDiversityHostComp/WNV_Ny99_E_blasp_filt_trimID.fasta')
+dmsFit <- read.csv('~/OneDrive - National Institutes of Health/WNV_E_DMS/DMS_P1_C6_DC_Ve_RepAB/DMS_P1_C6_DC_RepAB_normEfit.csv')
+hostSubsDF <- data.frame(matrix(ncol = 5, nrow = 0))
+colnames(hostSubsDF) <- c('id', 'sub', 'host', 'mosFit', 'humFit')
+nyE <- linEs['NY99_DMS_WT']
+i=1
+while (i < nrow(hostIDs)){
+  linE <- linEs[hostIDs[i,1]]
+  aln <- pairwiseAlignment(nyE, linE)
+  aasubs <- mismatchTable(aln)
+  aasubs <- aasubs[!(aasubs$SubjectSubstring=='X' | aasubs$SubjectSubstring=='B'),]
+  subs=paste0(aasubs$PatternSubstring, aasubs$PatternStart, aasubs$SubjectSubstring, sep='')
+  if (length(subs) > 0){
+    subDms <- subset(dmsFit, dmsFit$sub %in% subs)
+    subdf <- data.frame(id=rep(hostIDs[i,1], nrow(aasubs)), sub=subset(subDms, host=='Mosquito')$sub, host=rep(hostIDs[i,2], nrow(aasubs)), mosFit=subset(subDms, host=='Mosquito')$normFit, humFit=subset(subDms,  host=='Human')$normFit)
+    hostSubsDF <- rbind(hostSubsDF, subdf)
+  }
+  i=i+1
+}
+hostSubsDFlong <- pivot_longer(hostSubsDF, cols=c('mosFit', 'humFit'), names_to='fitness')
+write.csv(hostSubsDFlong, '~/OneDrive - National Institutes of Health/WNV_E_DMS/DMS_P1_C6_DC_Ve_RepAB/WNV_E_hostNatDiv_DMS_v4.csv')
+```
+
+## Fig 5A
+```{r}
+hostSubsDFlong <- read.csv('~/OneDrive - National Institutes of Health/WNV_E_DMS/DMS_P1_CG-DC-C6-Ve_RepAB_WTNorm_052125/WNV_E_hostNatDiv_DMS_v5.csv')
+hostsub <- unique(hostSubsDFlong[,3:6])
+hostLab <- c('Arthropod', 'Bird', 'Mammal')
+names(hostLab) <- c('arth', 'bird', 'mam')
+fits <- read.csv('~/OneDrive - National Institutes of Health/WNV_E_DMS/DMS_P1_CG-DC-C6-Ve_RepAB_WTNorm_052125/DMS_P1_CG_C6_DC_RepAB_normEfit_060425.csv')
+fits$fitness <- ifelse(fits$host=='Mosquito', 'mosFit', ifelse(fits$host=='Human','humFit', 'birFit'))
+hostsub <- rbind(hostsub, data.frame(sub=fits$sub, host=rep('TotalDMS', nrow(fits)), fitness=fits$fitness, value=fits$normFit))
+ggplot(hostsub, aes(x=fitness, y=value))+
+  geom_violin(aes(fill=fitness))+
+  geom_boxplot(width=1/length(unique(hostsub$fitness)))+
+  facet_wrap(~host, labeller=labeller(host=hostLab), ncol=4)+
+  theme_bw()+
+  scale_fill_manual(labels=c('CGBQ','Raji','C6/36'), values=c(birFit='indianred3', humFit='mediumpurple3', mosFit='darkgreen'))+
+  labs(x='Host Cell', y='WT-Normalized Fitness', fill='Host')+
+  theme(axis.title.x=element_blank(), axis.text.x=element_blank(), axis.ticks.x=element_blank())
+ggsave('~/OneDrive - National Institutes of Health/WNV_E_DMS/Figures/natSubFitDist.pdf', height=7, width=12)
+```
+
+## Fig 5B
+```{r}
+natSubs <- unique(hostSubsDFlong[,-c(1,2,4)])
+quantile(subset(natSubs, fitness=='humFit')$value, 0.05)
+quantile(subset(natSubs, fitness=='mosFit')$value, 0.05)
+quantile(subset(natSubs, fitness=='birFit')$value, 0.05)
+fitdf <- merge(subset(fits, host=='Human'), subset(fits, host=='Mosquito'), by='sub')
+fitdf <- merge(fitdf, subset(fits, host=='Bird'), by='sub')
+fitdf$nat <- ifelse(fitdf$sub %in% natSubs$sub, 'Present', 'Unobserved')
+fitdf <- fitdf[order(fitdf$nat, decreasing=TRUE),]
+ggplot(fitdf, aes(x=normFit, y=normFit.y, color=nat))+
+  geom_point()+
+  theme_bw()+
+  geom_vline(xintercept=-2.85, linetype=2, color='red')+
+  geom_hline(yintercept=-1.81, linetype=2, color='red')+
+  scale_color_manual(values=c(Present='gold3', Unobserved='black'))+
+  coord_fixed(ratio=1)+
+  labs(x='CGBQ Fitness Effect', y='C6/36 Fitness Effect', color='Presence in Nature')
+ggsave('~/OneDrive - National Institutes of Health/WNV_E_DMS/Figures/natScatter.pdf', height=4, width=7)
+nrow(subset(fitdf, normFit > -2.85 & normFit.y < -1.81))
+nrow(subset(fitdf, nat=='Present'))/nrow(subset(fitdf, normFit > -2.85))
+nrow(subset(fitdf, normFit < -2.85 & normFit.y > -1.81))
+nrow(subset(fitdf, nat=='Present'))/nrow(subset(fitdf, normFit.y > -1.81))
+nrow(subset(fitdf, normFit > -2.85 & normFit.y > -1.81 & nat == 'Unobserved'))
+nrow(subset(fitdf, normFit > -2.85 & normFit.y > -1.81 & nat == 'Present'))
+nrow(subset(fitdf, nat == 'Present'))
+nrow(subset(fitdf, normFit > -2.85 & normFit.y > -1.81))
+nrow(subset(fitdf, normFit < -2.85 & normFit.y < -1.81))
+```
+
+## Parsing Flavivirus E Clades
+```{r}
+flaviEs <- readAAStringSet('~/OneDrive - National Institutes of Health/WNV_E_DMS/FlaviEntComp/FlaviVIPR_fl_aaTrimE.translated_noGaps.fasta')
+flaviEdf <- as.data.frame(do.call(rbind, strsplit(names(flaviEs), split="|", fixed=TRUE)))
+colnames(flaviEdf) <- c('acc', 'strain', 'NA', 'date', 'host', 'geo', 'geno', 'virus')
+flaviEdf$name <- names(flaviEs)
+
+clade0 <- c("West_Nile_virus", "West_Nile_virus_SA93/01", "West_Nile_virus_H442", "West_Nile_virus_SA381/00", "Kunjin_virus", "Koutango_virus")
+clade1 <- c("Murray_Valley_encephalitis_virus", "Usutu_virus", "Japanese_encephalitis_virus", "Saint_Louis_encephalitis_virus", "St._Louis_encephalitis_virus", "Cacipacore_virus")
+clade2 <- c("Ilheus_virus", "Rocio_virus", "T'Ho_virus", "Tembusu_virus", "Bagaza_virus", "Duck_Tembusu_virus", "Flavivirus_muscovy/SD/China/2011", "Duck_flavivirus_TA", "Flavivirus_White_Kaiya_duck/WR/China/2010", "Israel_turkey_meningoencephalomyelitis_virus", "Baiyangdian_virus")
+clade3 <- c("Torres_virus", "Stratford_virus", "New_Mapoon_virus", "Aroa_virus", "Bainyik_virus")
+clade4 <- c("Dengue_virus_2", "Dengue_virus_1", "Dengue_virus_3", "Dengue_virus_4", "Dengue_virus", "Spondweni_virus", "Zika_virus")
+clade5 <- c("Nounane_virus", "Nanay_virus", "Donggang_virus", "Marisma_mosquito_virus", "Chaoyang_virus", "Binjari_virus", "Long_Pine_Key_virus")
+clade6 <- c("Entebbe_bat_virus", "Fitzroy_River_virus", "Paraiso_Escondido_virus", "Sokoluk_virus", "Wesselsbron_virus", "Yellow_fever_virus", "Yokose_virus")
+clade7 <- c("Alkhumra_hemorrhagic_fever_virus", "Alkhurma_hemorrhagic_fever_virus", "Gadgets_Gully_virus", "Karshi_virus", "Kama_virus", "Kyasanur_forest_disease_virus", "Langat_virus", "Louping_ill_virus", "Omsk_hemorrhagic_fever_virus", "Powassan_virus", "Spanish_goat_encephalitis_virus", "Tick_borne_encephalitis_virus", "Tyuleniy_virus")
+
+clade0 <- c("West_Nile_virus", "West_Nile_virus_SA93/01", "West_Nile_virus_H442", "West_Nile_virus_SA381/00", "Kunjin_virus", "Koutango_virus")
+clade1 <- c("Murray_Valley_encephalitis_virus", "Usutu_virus", "Japanese_encephalitis_virus")
+clade2 <- c("Tembusu_virus", "Bagaza_virus", "Duck_Tembusu_virus", "Flavivirus_muscovy/SD/China/2011", "Duck_flavivirus_TA", "Flavivirus_White_Kaiya_duck/WR/China/2010", "Israel_turkey_meningoencephalomyelitis_virus", "Baiyangdian_virus")
+clade3 <- c("Ilheus_virus", "Rocio_virus", "T'Ho_virus")
+clade4 <- c("Torres_virus", "Stratford_virus", "New_Mapoon_virus", "Aroa_virus", "Bainyik_virus")
+clade5 <- c("Dengue_virus_2", "Dengue_virus_1", "Dengue_virus_3", "Dengue_virus_4", "Dengue_virus", "Spondweni_virus", "Zika_virus")
+clade6 <- c("Donggang_virus", "Marisma_mosquito_virus", "Chaoyang_virus", "Binjari_virus", "Long_Pine_Key_virus")
+clade7 <- c("Alkhumra_hemorrhagic_fever_virus", "Alkhurma_hemorrhagic_fever_virus", "Gadgets_Gully_virus", "Karshi_virus", "Kama_virus", "Kyasanur_forest_disease_virus", "Langat_virus", "Louping_ill_virus", "Omsk_hemorrhagic_fever_virus", "Powassan_virus", "Spanish_goat_encephalitis_virus", "Tick_borne_encephalitis_virus", "Tyuleniy_virus")
+
+c0seqs <- flaviEs[subset(flaviEdf, virus %in% clade0)$name]
+c1seqs <- flaviEs[subset(flaviEdf, virus %in% clade1)$name]
+c2seqs <- flaviEs[subset(flaviEdf, virus %in% clade2)$name]
+c3seqs <- flaviEs[subset(flaviEdf, virus %in% clade3)$name]
+c4seqs <- flaviEs[subset(flaviEdf, virus %in% clade4)$name]
+c5seqs <- flaviEs[subset(flaviEdf, virus %in% clade5)$name]
+c6seqs <- flaviEs[subset(flaviEdf, virus %in% clade6)$name]
+c7seqs <- flaviEs[subset(flaviEdf, virus %in% clade7)$name]
+writeXStringSet(c0seqs, '~/OneDrive - National Institutes of Health/WNV_E_DMS/FlaviEntComp/clade0_allE.fasta', format='fasta')
+writeXStringSet(c1seqs, '~/OneDrive - National Institutes of Health/WNV_E_DMS/FlaviEntComp/clade1_allE.fasta', format='fasta')
+writeXStringSet(c2seqs, '~/OneDrive - National Institutes of Health/WNV_E_DMS/FlaviEntComp/clade2_allE.fasta', format='fasta')
+writeXStringSet(c3seqs, '~/OneDrive - National Institutes of Health/WNV_E_DMS/FlaviEntComp/clade3_allE.fasta', format='fasta')
+writeXStringSet(c4seqs, '~/OneDrive - National Institutes of Health/WNV_E_DMS/FlaviEntComp/clade4_allE.fasta', format='fasta')
+writeXStringSet(c5seqs, '~/OneDrive - National Institutes of Health/WNV_E_DMS/FlaviEntComp/clade5_allE.fasta', format='fasta')
+writeXStringSet(c6seqs, '~/OneDrive - National Institutes of Health/WNV_E_DMS/FlaviEntComp/clade6_allE.fasta', format='fasta')
+writeXStringSet(c7seqs, '~/OneDrive - National Institutes of Health/WNV_E_DMS/FlaviEntComp/clade7_allE.fasta', format='fasta')
+```
+
+## Relative Entropy Calculations
+```{r}
+fastas <- c('clade0', 'clade1', 'clade2', 'clade3', 'clade4', 'clade5', 'clade6', 'clade7')
+entsN <- data.frame(matrix(ncol=3, nrow=0))
+for (fasta in fastas){
+  wnvEs <- readAAStringSet(paste0('~/OneDrive - National Institutes of Health/WNV_E_DMS/FlaviEntComp/cladeEs_cdhit/FlaviEs_', fasta,'_030125.fasta', sep=''))
+  posProbsW <- consensusMatrix(wnvEs)/length(wnvEs)
+  posProbsW <- as.data.frame(t(posProbsW))
+  posProbsW$aaSite <- c(1:501)
+  posProbsW <- posProbsW[posProbsW[,28]==0,]
+  newdf <- pivot_longer(as.data.frame(posProbsW[,c(1:20, 31)]), cols=everything()[1:20], names_to='aaSub', values_to='freq')
+  newdf$clade <- rep(fasta, nrow(newdf))
+  newdf <- newdf[order(newdf$aaSite, newdf$AA),]
+  entsN <- rbind(entsN, newdf)
+}
+entsN$freq <- entsN$freq+0.00001
+dists <- stringDist(wnvEs)
+
+fits <- read.csv('~/OneDrive - National Institutes of Health/WNV_E_DMS/DMS_P1_CG-DC-C6-Ve_RepAB_WTNorm_052125/DMS_P1_CG_C6_DC_RepAB_normEfit_060425.csv')
+fits$scoreExp <- 2**fits$normFit
+fits$aaSub <- str_sub(fits$sub, start=-1)
+fitsSub <- fits[,c(5,2,7,8)]
+allAA <- c('A', 'V', 'I', 'L', 'M', 'F', 'Y', 'W', 'S', 'T', 'N', 'Q',  'R', 'H', 'K', 'D', 'E', 'C', 'G', 'P')
+for (site in unique(fitsSub$aaSite)){
+  subdf <- subset(fitsSub, aaSite==site)
+  fitsSub <- rbind(fitsSub, data.frame(aaSite=c(site, site, site),host=c('Mosquito', 'Human', 'Bird'), scoreExp=c(2, 2, 2), aaSub=rep(setdiff(allAA, unique(subdf$aaSub)), 3)))
+}
+fitsFreq <- fitsSub %>% group_by(host, aaSite) %>% summarize(freq=scoreExp/sum(scoreExp), AA=aaSub)
+fitsFreq <- fitsFreq[order(fitsFreq$host, fitsFreq$aaSite, fitsFreq$AA),]
+
+entsND <- merge(entsN, fitsFreq, by=c('aaSite', 'AA'))
+relEntSite <- entsND %>% group_by(clade, host, aaSite) %>% reframe(ent=freq.x*log(freq.x/freq.y, 20)) #DMS as expected, natural as true
+relEntSite2 <- entsND %>% group_by(clade, host, aaSite) %>% reframe(ent=freq.y*log(freq.y/freq.x, 20)) #natural as expected, DMS as true
+relEnt <- relEntSite %>% group_by(clade, host, aaSite) %>% reframe(RE=sum(ent))
+relEnt2 <- relEntSite2 %>% group_by(clade, host, aaSite) %>% reframe(RE=sum(ent))
+relEntAll <- merge(relEnt, relEnt2, by=c('clade', 'host', 'aaSite'))
+colnames(relEntAll) <- c('clade', 'host', 'aaSite', 'nat/dms', 'dms/nat')
+write.csv(relEntAll, '~/OneDrive - National Institutes of Health/WNV_E_DMS/FlaviEntComp/relativeEntropy_060425.csv', row.names = FALSE)
+```
+
+## Fig 5D
+```{r}
+relEnt <- read.csv('~/OneDrive - National Institutes of Health/WNV_E_DMS/FlaviEntComp/relativeEntropy_060425.csv')
+relEnt <- subset(relEnt, (clade != 'clade3'))
+relEnt2 <- relEnt[order(relEnt$clade, decreasing=TRUE),]
+relEnt2$div <- ifelse(relEnt2$nat.dms>1, 'Div', 'noDiv')
+cellLab <- c('Raji', 'C6/36')
+names(cellLab) <- c('Human', 'Mosquito')
+cladLab <- c('WNV', 'JEV Group', 'TMUV Group', 'STRV Group', 'DENV Group', 'BinJV Group', 'TBEV Group')
+names(cladLab) <- c('clade0', 'clade1', 'clade2', 'clade4', 'clade5', 'clade6', 'clade7')
+ggplot(relEnt2, aes(x=aaSite, y=nat.dms, fill=host, color=div))+
+  geom_point(pch=21, size=3)+
+  facet_grid(clade~host, labeller=labeller(host=cellLab, clade=cladLab))+
+  #facet_grid(clade~host)+
+  scale_fill_manual(labels=c('Raji','C6/36'), values=c(Human='mediumpurple3', Mosquito='darkgreen'))+
+  scale_color_manual(labels=c('Divergent','Expected'), values=c(Div='firebrick', noDiv='gray'))+
+  theme_bw()+
+  geom_hline(yintercept=1, color='firebrick')+
+  labs(x='Amino Acid Position', y='Relative Entropy', color='Divergence', fill='Host')+
+  guides(fill="none", color='none')
+ggsave('~/OneDrive - National Institutes of Health/WNV_E_DMS/Figures/relEnt.pdf', height=9.5, width=8)
+```
+
+## Fig 5E
+```{r}
+Etree <- read.nexus('~/OneDrive - National Institutes of Health/WNV_E_DMS/FlaviEntComp/iqtall_022425/iqt.treefile')
+allDists <- dist.nodes(Etree)
+nodeDists <- data.frame(clade=c('clade0', 'clade1', 'clade2', 'clade3', 'clade4', 'clade5', 'clade6', 'clade7'), dists=c(allDists[108, 101], allDists[108, 78], allDists[108, 56], allDists[108, 53], allDists[108, 119], allDists[108, 123], allDists[108, 295], allDists[108, 2]))
+relEnt <- read.csv('~/OneDrive - National Institutes of Health/WNV_E_DMS/FlaviEntComp/relativeEntropt_022425.csv')
+relEnt2 <- relEnt[order(relEnt$clade, decreasing=TRUE),]
+relEntMed <- relEnt2 %>% group_by(clade, host) %>% reframe(entMed=median(nat.dms))
+relEntMedDist <- merge(relEntMed, nodeDists, by='clade')
+relEntDist <- merge(relEnt, nodeDists, by='clade')
+ggplot(subset(relEntDist, clade != 'clade3'), aes(x=dists, y=nat.dms, color=host))+
+  stat_summary(fun.data=mean_cl_boot, geom="pointrange",fun.args=list(conf.int=.95), size=1.2)+
+  theme_bw()+
+  scale_color_manual(labels=c('Raji','C6/36'), values=c(Human='mediumpurple3', Mosquito='darkgreen'))+
+  labs(x='Phylogenetic Distance', y='Mean Relative Entropy', color='Host')
+ggsave('~/OneDrive - National Institutes of Health/WNV_E_DMS/Figures/divMedEnt.pdf', height=5.5)
+
+cor.test(subset(relEntMedDist, host=='Human')$entMed, subset(relEntMedDist, host=='Human')$dists)
+cor.test(subset(relEntMedDist, host=='Mosquito')$entMed, subset(relEntMedDist, host=='Mosquito')$dists)
+```
+
+## Fig 5F
+```{r}
+relEnt <- read.csv('~/OneDrive - National Institutes of Health/WNV_E_DMS/FlaviEntComp/relativeEntropt_060425.csv')
+relEnt <- subset(relEnt, (clade != 'clade3'))
+relEntPCA <- relEnt[,-c(5)] %>% subset(clade !='clade3') %>% pivot_wider(names_from=c('clade', 'host'), values_from='nat.dms') %>% as.data.frame()
+rownames(relEntPCA) <- relEntPCA$aaSite
+relEntPCA <- relEntPCA[complete.cases(relEntPCA),-c(1)]
+pca1 <- princomp(relEntPCA)
+pcaDfSub <- data.frame(pc1=pca1$scores[,1], pc2=pca1$scores[,2], aaSite=rownames(pca1$scores))
+pcaDfSub$col <- rep('site', nrow(pcaDfSub))
+pcaDfSub$size <- rep('site', nrow(pcaDfSub))
+pcaLoa <- data.frame(pc1=pcaComps$pc1, pc2=pcaComps$pc2, col=pcaComps$host, size=rep('load', nrow(pcaComps)))
+pcaScoLoa <- rbind(pcaDfSub[,c(1:2, 4:5)], pcaLoa)
+ggplot(pcaScoLoa, aes(x=pc1, y=pc2, color=col, size=size))+
+  geom_point()+
+  scale_color_manual(values=c('site'='orange', 'Human'='mediumpurple3', 'Mosquito'='darkgreen', 'Bird'='indianred3'))+
+  scale_size_manual(values=c('load'=2.5, 'site'=1.5))+
+  geom_hline(aes(yintercept=0), linetype=2)+
+  geom_vline(aes(xintercept=0), linetype=2)+
+  theme_bw()+
+  labs(x='PC1 (48.0%)', y='PC2 (16.7%)')
+ggsave('~/OneDrive - National Institutes of Health/WNV_E_DMS/Figures/divPCA_wLoad.pdf')
+
+# Sup Fig 8B
+pcaDfSubRelEnt <- merge(pcaDfSub, relEnt[,c(1:4)], by=c('aaSite'))
+cellLab <- c('CGBQ', 'Raji', 'C6/36')
+names(cellLab) <- c('Bird', 'Human', 'Mosquito')
+ggplot(pcaDfSubRelEnt, aes(x=pc1, y=pc2, color=nat.dms))+
+  geom_point()+
+  geom_hline(aes(yintercept=0))+
+  geom_vline(aes(xintercept=0))+
+  facet_grid(clade~host, labeller=labeller(host=cellLab, clade=cladLab))+
+  labs(x='PC1 (48.0%)', y='PC2 (16.7%)', color='Relative Entropy')+
+  theme_bw()
+ggsave('~/OneDrive - National Institutes of Health/WNV_E_DMS/Figures/divPCA_wRelEnt.pdf', height=9)
+```
+
+## Fig 5G
+```{r}
+pcaDfLong <- pivot_longer(pcaDf, cols=c('pc1', 'pc2'), names_to='pc', values_to='score')
+d1 <- c(1:51, 134:195, 285:297)
+d2 <- c(52:97, 111:133, 196:284)
+d3 <- c(298:400)
+tm <- c(401:501)
+pcaDfLong$Domain <- ifelse(pcaDfLong$aaSite %in% d1, 'DI', ifelse(pcaDfLong$aaSite %in% d2, 'DII', ifelse(pcaDfLong$aaSite %in% d3, 'DIII', ifelse(pcaDfLong$aaSite %in% tm, 'TM', 'FL'))))
+ggplot(unique(pcaDfLong[,c(1,9,10,11)]), aes(x=as.numeric(aaSite), y=score, fill=Domain))+
+  geom_col()+
+  theme_bw()+
+  facet_wrap(~pc, ncol=2)+
+  scale_fill_manual(values=c(DI='red', DII='yellow', DIII='blue', TM='#940094', FL='cyan'))
+ggsave('~/OneDrive - National Institutes of Health/WNV_E_DMS/Figures/pcGenome.pdf', width=18)
+```
+
+# Supplemental Figures
+## Sup Fig 1
+```{r}
+library(ineq)
+library(ggridges)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+#Reading in the table files generated from GatkV4
+input <- read.table("~/OneDrive - National Institutes of Health/WNV_E_DMS/E_input.aaCounts",header=TRUE) 
+#Selecting only amino acid variants
+AA_only_e <- select(input,A:W,Y)
+#Transforming df into long format
+e_only_long <- AA_only_e %>% select(A:Y) %>% gather(Variants,Counts)
+#Filtering out WT frequencies with 0 (Less than 50k counts, wild type usually in 100k-1million counts depending on depth)
+e_only_long <- filter(e_only_long,Counts<100000)
+aas<-read.csv("~/Documents/tableAAs.csv", row.names=1)
+e_only_long$class <- rep(NA, nrow(e_only_long))
+i=1
+while (i <= nrow(e_only_long)){
+  e_only_long[i,3] <- aas[as.character(e_only_long[i,1]),'Class'] 
+  i=i+1
+}
+
+# Sup Fig 1A
+aaOrder <- c('A', 'V', 'I', 'L', 'M', 'F', 'W', 'G', 'P', 'C', 'Y', 'S', 'T', 'N', 'Q',  'R', 'H', 'K', 'D', 'E')
+ggplot(e_only_long, aes(x=Variants, y=log10(Counts), fill=class))+
+  geom_boxplot(aes(x=factor(Variants, level=aaOrder)))+
+  #ylim(0,500)+
+  theme_bw()+
+  xlab('Amino Acid')
+ggsave('~/OneDrive - National Institutes of Health/WNV_E_DMS/Figures/inputBox.pdf', height=4.48, width=7.25)
+
+# Sup Fig 1B
+ggplot(e_only_long, aes(x=log10(Counts+1), y=Variants, fill=class))+
+  geom_density_ridges(aes(y=factor(Variants, level=aaOrder)))+
+  theme_ridges()+
+  ylab('Amino Acid')+
+  xlab('Log10(Count)')
+ggsave('~/OneDrive - National Institutes of Health/WNV_E_DMS/Figures/inputRidge.pdf')
+
+# Sup Fig 1C
+plot(Lc(e_only_long$Counts))#Saved manually
+ineq(e_only_long$Counts, type='Gini')
+```
+
+## Sup Fig 2
+```{r}
+library(ggplot2)
+
+#Fig 2A
+fits <- read.csv("~/OneDrive - National Institutes of Health/WNV_E_DMS/DMS_P1_CG-DC-C6-Ve_RepAB_WTNorm_052125/DMS_P1_CG_C6_DC_RepAB_normEfit_060425.csv")
+d1 <- c(1:51, 134:195, 285:297)
+d2 <- c(52:97, 111:133, 196:284)
+d3 <- c(298:400)
+tm <- c(401:501)
+fits$Domain <- ifelse(fits$aaSite %in% d1, 'DI', ifelse(fits$aaSite %in% d2, 'DII', ifelse(fits$aaSite %in% d3, 'DIII', ifelse(fits$aaSite %in% tm, 'TM', 'FL'))))
+ggplot(fits, aes(x=Domain, y=normFit))+
+  geom_violin(aes(fill=Domain))+
+  geom_boxplot(width=2/length(unique(fits$Domain)))+
+  facet_wrap(~host, labeller=labeller(host=cellLab))+
+  theme_bw()+
+  scale_fill_manual(values=c(DI='red', DII='yellow', DIII='blue', TM='#940094', FL='cyan'))+
+  labs(x='Domain', y='WT-Normalized Fitness')
+ggsave('~/OneDrive - National Institutes of Health/WNV_E_DMS/Figures/domBox.pdf', height=5, width=10)
+kruskal.test(normFit ~ Domain, dat=subset(fits, Domain %in% c('DI', 'DII', 'DIII')))
+wilcox.test(subset(fits, Domain %in% c('DI', 'DII', 'DIII'))$normFit, subset(fits, Domain=='TM')$normFit)
+wilcox.test(subset(fits, Domain %in% c('DI', 'DII', 'DIII'))$normFit, subset(fits, Domain=='FL')$normFit)
+```
+
+## Sup Fig 5
+```{r}
+library(ggplot2)
+library(PCAtools)
+library(stringr)
+
+# Sup Fig 5A
+fits$aaSub <- str_sub(fits$sub, start=-1)
+aaOrder <- c('A', 'V', 'I', 'L', 'M', 'C', 'S', 'T', 'Y', 'F', 'W', 'N', 'Q', 'H', 'R', 'K', 'D', 'E', 'G', 'P')
+ggplot(fits, aes(x=aaSub, y=normFit, fill=host))+
+  geom_boxplot(aes(x=factor(aaSub, level=aaOrder)))+
+  scale_fill_manual(labels=c('CGBQ DMS', 'Raji DMS','C6/36 DMS'), values=c(Bird='coral3', Human='mediumpurple3', Mosquito='darkgreen'))+
+  theme_classic()+
+  labs(x='Amino Acid', y='WT Normalized Fitness', fill='Host')
+ggsave('~/OneDrive - National Institutes of Health/WNV_E_DMS/Figures/aaBoxplots.pdf', height=4, width=12)
+
+# Sup Fig 5B
+birFits <- reshape(subset(fits, host=='Bird')[,c(2,6,7)], idvar='aaSite', timevar='aaSub', direction='wide')
+birFits[is.na(birFits)] <- 1
+birFits <- birFits[,c(-1)] %>% relocate('normFit.A', .before='normFit.C')
+colnames(birFits) <- rownames(aas)
+pcaBir <- pca(birFits, metadata=aas)
+biplot(pcaBir, colby='Class', legendPosition = 'right')
+
+# Sup Fig 5C
+aas<-read.csv("~/Documents/tableAAs.csv", row.names=1)
+humFits <- reshape(subset(fits, host=='Human')[,c(2,6,7)], idvar='aaSite', timevar='aaSub', direction='wide')
+humFits[is.na(humFits)] <- 1
+humFits <- humFits[,c(-1)] %>% relocate('normFit.A', .before='normFit.C')
+colnames(humFits) <- rownames(aas)
+pcaHum <- pca(humFits, metadata=aas)
+biplot(pcaHum, colby='Class', legendPosition = 'right')
+
+# Sup Fig 5D
+mosFits <- reshape(subset(fits, host=='Mosquito')[,c(2,6,7)], idvar='aaSite', timevar='aaSub', direction='wide')
+mosFits[is.na(mosFits)] <- 1
+mosFits <- mosFits[,c(-1)] %>% relocate('normFit.A', .before='normFit.C')
+colnames(mosFits) <- rownames(aas)
+pcaMos <- pca(mosFits, metadata=aas)
+biplot(pcaMos, colby='Class', legendPosition = 'right')
+
+```
+
+## Sup Fig 6
+```{r}
+library(seqinr)
+library(ggplot2)
+
+# Sup Fig 6A
+birdSubs <- unique(subset(hostSubsDFlong, host=='bird')$sub)
+arthSubs <- unique(subset(hostSubsDFlong, host=='arth')$sub)
+mamSubs <- unique(subset(hostSubsDFlong, host=='mam')$sub)
+uniSubs <- c(setdiff(birdSubs, union(arthSubs, mamSubs)), setdiff(arthSubs, union(birdSubs, mamSubs)), setdiff(mamSubs, union(arthSubs, birdSubs)))
+uniSubFit <- unique(subset(hostSubsDFlong, sub %in% uniSubs)[,3:6])
+comSubs <- Reduce(intersect, list(birdSubs, arthSubs, mamSubs))
+comSubFit <- unique(subset(hostSubsDFlong, sub %in% comSubs))[,3:6]
+comSubFit$host <- rep('com', nrow(comSubFit))
+uniSubFit <- rbind(uniSubFit, unique(comSubFit))
+ggplot(uniSubFit, aes(x=fitness, y=value, fill=fitness))+
+  geom_boxplot()+
+  scale_fill_manual(labels=c('CGBQ', 'Raji','C6/36'), values=c(birFit='coral3', humFit='mediumpurple3', mosFit='darkgreen'))+
+  facet_wrap(~host, labeller=labeller(host=hostLab))+
+  theme_bw()
+ggsave('~/OneDrive - National Institutes of Health/WNV_E_DMS/Figures/natSubFitDist_uniSubs.pdf')
+wilcox.test(subset(comSubFit, fitness=='mosFit')$value, subset(comSubFit, fitness=='humFit')$value)
+kruskal.test(value ~ host, dat=subset(uniSubFit, fitness=='humFit'))
+kruskal.test(value ~ host, dat=subset(uniSubFit, fitness=='mosFit'))
+
+#Sup Fig 6B
+options(scipen=999)
+natdiv <- read.alignment('~/OneDrive - National Institutes of Health/WNV_E_DMS/Lin1NatDiversityHostComp/WNV_Ny99_E_blasp_filt_trimID.fasta', format='fasta')
+accs <- read.csv('~/OneDrive - National Institutes of Health/WNV_E_DMS/Lin1NatDiversityHostComp/WNV_E_hostIDs.csv')
+aaDists <- dist.alignment(natdiv, matrix='identity')
+aaScale <- cmdscale(aaDists)
+aaScale <- as.data.frame(aaScale)
+colnames(aaScale) <- c('d1', 'd2')
+aaScale$id <- rownames(aaScale)
+aaScale <- merge(aaScale, accs, by='id')
+ggplot(aaScale, aes(x=d1, y=d2, color=host))+
+  geom_jitter()+
+  theme_bw()+
+  labs(x='Dimension 1', y='Dimension 2', Color='Host of Isolation')
+ggsave('~/OneDrive - National Institutes of Health/WNV_E_DMS/Figures/natSubMDS.pdf', height=5, width=5)
+```
+
+## Sup Fig 7
+```{r}
+library(venn)
+library(ggplot2)
+library(stringr)
+library(ggnewscale)
+
+# Sup Fig 7A
+siteListB <- list(JEVGroup=subset(relEnt, clade=='clade1' & host=='Bird' & nat.dms > 1)$aaSite,
+                  TMUVGroup=subset(relEnt, clade=='clade2' & host=='Bird' & nat.dms > 1)$aaSite,
+                  STRVGroup=subset(relEnt, clade=='clade4' & host=='Bird' & nat.dms > 1)$aaSite,
+                  DENVGroup=subset(relEnt, clade=='clade5' & host=='Bird' & nat.dms > 1)$aaSite,
+                  BinJVGroup=subset(relEnt, clade=='clade6' & host=='Bird' & nat.dms > 1)$aaSite,
+                  TBEVGroup=subset(relEnt, clade=='clade7' & host=='Bird' & nat.dms > 1)$aaSite)
+venn(siteListB, ilab='counts', zcolor = "style", ilcs=1)
+
+# Sup Fig 7B
+siteListH <- list(JEVGroup=subset(relEnt, clade=='clade1' & host=='Human' & nat.dms > 1)$aaSite,
+                  TMUVGroup=subset(relEnt, clade=='clade2' & host=='Human' & nat.dms > 1)$aaSite,
+                  STRVGroup=subset(relEnt, clade=='clade4' & host=='Human' & nat.dms > 1)$aaSite,
+                  DENVGroup=subset(relEnt, clade=='clade5' & host=='Human' & nat.dms > 1)$aaSite,
+                  BinJVGroup=subset(relEnt, clade=='clade6' & host=='Human' & nat.dms > 1)$aaSite,
+                  TBEVGroup=subset(relEnt, clade=='clade7' & host=='Human' & nat.dms > 1)$aaSite)
+venn(siteListH, ilab='counts', zcolor = "style", ilcs=1)
+
+# Sup Fig 7C
+siteListM <- list(JEVGroup=subset(relEnt, clade=='clade1' & host=='Mosquito' & nat.dms > 1)$aaSite,
+                  TMUVGroup=subset(relEnt, clade=='clade2' & host=='Mosquito' & nat.dms > 1)$aaSite,
+                  STRVGroup=subset(relEnt, clade=='clade4' & host=='Mosquito' & nat.dms > 1)$aaSite,
+                  DENVGroup=subset(relEnt, clade=='clade5' & host=='Mosquito' & nat.dms > 1)$aaSite,
+                  BinJVGroup=subset(relEnt, clade=='clade6' & host=='Mosquito' & nat.dms > 1)$aaSite,
+                  TBEVGroup=subset(relEnt, clade=='clade7' & host=='Mosquito' & nat.dms > 1)$aaSite)
+venn(siteListM, ilab='counts', zcolor = "style", ilcs=1)
+
+# Sup Fig 7D
+fits <- read.csv("~/OneDrive - National Institutes of Health/WNV_E_DMS/DMS_P1_CG-DC-C6-Ve_RepAB_WTNorm_052125/DMS_P1_CG_C6_DC_RepAB_normEfit_060425.csv")
+fits$AA <- str_sub(fits$sub, start=-1)
+relEnt <- read.csv('~/OneDrive - National Institutes of Health/WNV_E_DMS/FlaviEntComp/relativeEntropy_060425.csv')
+freqs <- read.csv('~/OneDrive - National Institutes of Health/WNV_E_DMS/FlaviEntComp/natDmsFreq_022425.csv')
+relEnt <- subset(relEnt, (clade != 'clade3' & clade != 'clade0'))
+relEnt$div <- ifelse(relEnt$nat.dms > 1, 'Divergent', 'Expected')
+fitsNatAll <- merge(fits[,c(2, 5, 6, 7)], subset(freqs, clade != 'Mosquito' & clade != 'Human'), by=c('AA', 'aaSite'))
+divSitesFits <- subset(merge(relEnt, fitsNatAll, by=c('aaSite', 'host', 'clade')), freq > 0.0001)
+dodge <- position_dodge(width = 1)
+cladeLabs <- c('JEV', 'TMUV', 'STRV', 'DENV', 'BinJV', 'TBEV')
+cellLab <- c('CGBQ', 'Raji', 'C6/36')
+names(cellLab) <- c('Bird', 'Human', 'Mosquito')
+ggplot(divSitesFits, aes(x=clade, y=normFit))+
+  geom_violin(aes(fill=factor(div)), position=dodge)+
+  scale_fill_manual(values=c(Divergent='firebrick', Expected='gray'))+
+  new_scale_fill()+
+  geom_boxplot(aes(fill=factor(div)), width=2/length(unique(divSitesFits$clade)), position=dodge)+
+  scale_fill_manual(values=c(Divergent='white', Expected='white'))+
+  scale_x_discrete(labels=cladeLabs)+
+  facet_wrap(~host, ncol=1, labeller=labeller(host=cellLab))+
+  theme_bw()+
+  labs(x='Flavivirus Clade', y='Fitness Effect')
+ggsave('~/OneDrive - National Institutes of Health/WNV_E_DMS/Figures/divSite_violinBox.pdf', height=7.5)
+```
+
+## Sup Fig 8
+```{r}
+# Sup Fig 8A
+shanEnt <- function(site) {
+  vec <- as.data.frame(site[1:20])
+  vec<-vec[vec>0]
+  -sum(vec * log(vec, 20))
+}
+
+clades <- c('Clade0', 'Clade3')
+entsN <- data.frame(matrix(ncol=3, nrow=0))
+for (clade in clades){
+  wnvEs <- readAAStringSet(paste0('~/OneDrive - National Institutes of Health/WNV_E_DMS/FlaviEntComp/Flavi_', clade, '_E.fasta', sep=''))
+  posProbsW <- consensusMatrix(wnvEs)/length(wnvEs)
+  posProbsW <- t(posProbsW)
+  rownames(posProbsW) <- c(1:501)
+  entsW <- as.data.frame(apply(posProbsW, 1, shanEnt))
+  colnames(entsW) <- ('natEnt')
+  entsW$aaSite <- c(1:501)
+  entsW$cladeNum <- rep(clade, 501)
+  entsN <- rbind(entsW, entsN)
+}
+fits <- read.csv("~/OneDrive - National Institutes of Health/WNV_E_DMS/DMS_P1_CG-DC-C6-Ve_RepAB_WTNorm_052125/DMS_P1_CG_C6_DC_RepAB_normEfit_060425.csv")
+fits$scoreExp <- 2**fits$normFit
+ents <- data.frame(matrix(ncol=3, nrow=0))
+for (site in unique(fits$aaSite)){
+  hsubdf <- rbind(subset(fits, host=='Human' & aaSite==site), data.frame(sub='WT', score='WT', host='Human', aaSite=site, SE='WT', normFit='WT', scoreExp=2))
+  bsubdf <- rbind(subset(fits, host=='Mosquito' & aaSite==site), data.frame(sub='WT', score='WT', host='Bird', aaSite=site, SE='WT', normFit='WT', scoreExp=2))
+  msubdf <- rbind(subset(fits, host=='Bird' & aaSite==site), data.frame(sub='WT', score='WT', host='Mosquito', aaSite=site, SE='WT', normFit='WT', scoreExp=2))
+  hent <- -sum(hsubdf$scoreExp/sum(hsubdf$scoreExp) * log(hsubdf$scoreExp/sum(hsubdf$scoreExp), 20))
+  ment <- -sum(msubdf$scoreExp/sum(msubdf$scoreExp) * log(msubdf$scoreExp/sum(msubdf$scoreExp), 20))
+  bent <- -sum(bsubdf$scoreExp/sum(bsubdf$scoreExp) * log(bsubdf$scoreExp/sum(bsubdf$scoreExp), 20))
+  subEnt <- data.frame(aaSite=c(site, site, site), ent=c(hent, ment, bent), Host=c('Human', 'Mosquito', 'Bird'))
+  ents <- rbind(ents, subEnt)
+}
+write.csv(ents, '~/OneDrive - National Institutes of Health/WNV_E_DMS/FlaviEntComp/dmsShanEnt_060425.csv', row.names = FALSE)
+entsWN <- merge(ents, entsN)
+cellLab <- c('CGBQ', 'Raji', 'C6/36')
+names(cellLab) <- c('Bird', 'Human', 'Mosquito')
+cladLab <- c('WNV', 'WNV + Similar FLavis')
+names(cladLab) <- c('Clade0', 'Clade3')
+ggplot(entsWN, aes(x=natEnt, y=ent, color=Host))+
+  geom_point()+
+  facet_grid(cladeNum ~ Host, labeller=labeller(Host=cellLab, cladeNum=cladLab))+
+  theme_bw()+
+  labs(x='Natural Entropy', y='DMS Entropy')+
+  scale_color_manual(labels=c('CGBQ DMS', 'Raji DMS','C6/36 DMS'), values=c(Bird='coral3', Human='mediumpurple3', Mosquito='darkgreen'))+
+  guides(color=FALSE)
+ggsave('~/OneDrive - National Institutes of Health/WNV_E_DMS/Figures/flaviEntCompScatter.pdf', height=5, width=9)
+cor.test(subset(entsWN, Host=='Bird' & cladeNum=='Clade0')$ent, subset(entsWN, Host=='Bird' & cladeNum=='Clade0')$natEnt)
+cor.test(subset(entsWN, Host=='Bird' & cladeNum=='Clade3')$ent, subset(entsWN, Host=='Bird' & cladeNum=='Clade3')$natEnt)
+cor.test(subset(entsWN, Host=='Human' & cladeNum=='Clade0')$ent, subset(entsWN, Host=='Bird' & cladeNum=='Clade0')$natEnt)
+cor.test(subset(entsWN, Host=='Human' & cladeNum=='Clade3')$ent, subset(entsWN, Host=='Bird' & cladeNum=='Clade3')$natEnt)
+cor.test(subset(entsWN, Host=='Mosquito' & cladeNum=='Clade0')$ent, subset(entsWN, Host=='Bird' & cladeNum=='Clade0')$natEnt)
+cor.test(subset(entsWN, Host=='Mosquito' & cladeNum=='Clade3')$ent, subset(entsWN, Host=='Bird' & cladeNum=='Clade3')$natEnt)
+```
