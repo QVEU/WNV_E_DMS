@@ -168,7 +168,7 @@ d2 <- c(52:97, 111:133, 196:284)
 d3 <- c(298:400)
 tm <- c(401:501)
 fits$Domain <- ifelse(fits$aaSite %in% d1, 'DI', ifelse(fits$aaSite %in% d2, 'DII', ifelse(fits$aaSite %in% d3, 'DIII', ifelse(fits$aaSite %in% tm, 'TM', 'FL'))))
-domPos <- unique(fits[,c(4,7)])
+domPos <- unique(fits[,c(2,7)])
 domPos$value=rep(1, nrow(domPos))
 ggplot(domPos, aes(x=aaSite, y=value, fill=Domain))+
   geom_col(width=1)+
@@ -257,8 +257,9 @@ library(bio3d)
 
 ## Fig 3A
 ```{r}
-fits <- read.csv("~/OneDrive - National Institutes of Health/WNV_E_DMS/DMS_P1_C6_DC_Ve_RepAB/DMS_P1_C6_DC_RepAB_normEfit.csv")
-fits$fitCat <- ifelse(fits$normFit+1.96*fits$SE <= -4 & fits$host=='Human', 'Lethal', ifelse(fits$normFit+1.96*fits$SE <= -2.8 & fits$host=='Mosquito', 'Lethal', ifelse(fits$normFit-1.96*fits$SE >= 0.5, 'Beneficial', ifelse(fits$normFit+1.96*fits$SE <= -0.5, 'Deleterious', 'Neutral'))))
+#Make sure to run Fig 1 code before this block
+
+fits$fitCat <- ifelse(fits$normFit+1.96*fits$SE <= -3.8 & fits$host=='Human', 'Lethal', ifelse(fits$normFit+1.96*fits$SE <= -2.9 & fits$host=='Mosquito', 'Lethal', ifelse(fits$normFit+1.96*fits$SE <= -4 & fits$host=='Bird', 'Lethal', ifelse(fits$normFit-1.96*fits$SE >= 0.5, 'Beneficial', ifelse(fits$normFit+1.96*fits$SE <= -0.5, 'Deleterious', 'Neutral')))))
 fitCats <- fits[,c(1,5,7)] %>% pivot_wider(names_from='host', values_from='fitCat')
 fitCatFreq <- as.data.frame(table(paste(fitCats$Mosquito, fitCats$Human, fitCats$Bird, sep='_')))
 fitCatFreq <- fitCatFreq[order(fitCatFreq$Freq, decreasing=TRUE),]
@@ -379,6 +380,7 @@ library(dplyr)
 library(stringr)
 library(ggplot2)
 library(ape)
+library(venn)
 ```
 
 ## Filtering of BLASTp Results Using Metadata from Batch Entrez
@@ -507,6 +509,10 @@ nrow(subset(fitdf, normFit > -2.85 & normFit.y > -1.81 & nat == 'Present'))
 nrow(subset(fitdf, nat == 'Present'))
 nrow(subset(fitdf, normFit > -2.85 & normFit.y > -1.81))
 nrow(subset(fitdf, normFit < -2.85 & normFit.y < -1.81))
+
+#Transmission venn
+viableSubs <- list(Raji=subset(fitdf, normFit.x > -2.46)$sub, C636=subset(fitdf, normFit.y > -1.81)$sub, CGBQ=subset(fitdf, normFit > -2.85)$sub)
+venn(viableSubs, ilab='counts', zcolor = "style", ilcs=1)
 ```
 
 ## Parsing Flavivirus E Clades
