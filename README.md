@@ -33,5 +33,5 @@ With the outputs from the previous steps, all necessary inputs should be present
 
 ## Natural Diversity
 
-To recapitulate the comparisons of fitness measurements to natural diversity, all necessary input alignments and BLAST outputs are present. Follow the Rmarkdown and publication methods to use these input files.
+To recapitulate the comparisons of fitness measurements to natural diversity, all necessary input alignments and BLAST outputs are present. Follow the Rmarkdown and publication methods to use these input files. The only missing component is the blast raw output with metadata (WNV_NY99_E_blastp_Lin1.gff3) so instead the output csv with the natural substitutions, host of isolation metadata, and fitness scores are provided (WNV_E_hostNatDiv_DMS_v5.csv).
 
