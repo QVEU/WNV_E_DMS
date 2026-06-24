@@ -3,7 +3,7 @@
 ## Overview
 
 In this directory are the input files and code to reproduce the results from [Dorman et al 2025](https://academic.oup.com/ve/article/11/1/veaf087/8307679). 
-- Calculate_Fitness_Scores: directory containing the counts files used as input for Enrich2
+- Calculate_Fitness_Scores: directory containing the counts files used as input for Enrich2. The data for the WT normalization experiments are separate in the WTNorm folder.
 - Generate_Figures: directory containing the csv with the fitness score for each variant in each cell as well as the Rmarkdown for analyzing the fitness scores and generating the figures
 - Natural_Diversity: directory containing the input alignments and blast outputs for comparing DMS results to natural diverstity (figrues 5 and 6)
 
